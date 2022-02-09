@@ -1,66 +1,102 @@
 const assert = require("assert");
 const ganache = require("ganache-cli");
 const Web3 = require("web3");
-const web3 = new Web3(ganache.provider());
 const { abi, evm } = require("../compile");
 
+const web3 = new Web3(ganache.provider());
 let accounts;
-let inbox;
+let lottery;
 
 beforeEach(async () => {
-  // Get all accounts from local ETH network
+  // Get a list of all accounts
   accounts = await web3.eth.getAccounts();
-
-  // Use one of those accounts to deploy the contract
-  inbox = await new web3.eth.Contract(abi)
-    .deploy({
-      data: evm.bytecode.object,
-      arguments: ["Hi there!"],
-    })
+  lottery = await new web3.eth.Contract(abi)
+    .deploy({ data: evm.bytecode.object })
     .send({ from: accounts[0], gas: "1000000" });
 });
 
-describe("Inbox", () => {
-  it("Deploys a contract", () => {
-    assert.ok(inbox.options.address);
+describe("Lottery Contract", () => {
+  it("Test contract deployment is OK", () => {
+    assert.ok(lottery.options.address);
   });
 
-  it("Has a default message", async () => {
-    const message = await inbox.methods.message().call();
-    assert.ok(message);
+  it("Allow a player to enter to the game", async () => {
+    await lottery.methods.enter().send({
+      from: accounts[0],
+      value: web3.utils.toWei("0.02", "ether"),
+    });
+
+    const players = await lottery.methods
+      .getAllPlayers()
+      .call({ from: accounts[0] });
+
+    assert.equal(accounts[0], players[0]);
+    assert.equal(1, players.length);
   });
 
-  it("Can change the message", async () => {
-    await inbox.methods.setMessage("bye").send({ from: accounts[0] });
-    const message = await inbox.methods.message().call();
-    assert.equal(message, "bye");
+  it("Allow multiple players to enter to the game", async () => {
+    await lottery.methods.enter().send({
+      from: accounts[0],
+      value: web3.utils.toWei("0.02", "ether"),
+    });
+
+    await lottery.methods.enter().send({
+      from: accounts[1],
+      value: web3.utils.toWei("0.02", "ether"),
+    });
+
+    await lottery.methods.enter().send({
+      from: accounts[2],
+      value: web3.utils.toWei("0.02", "ether"),
+    });
+
+    const players = await lottery.methods
+      .getAllPlayers()
+      .call({ from: accounts[0] });
+
+    assert.equal(accounts[0], players[0]);
+    assert.equal(accounts[1], players[1]);
+    assert.equal(accounts[2], players[2]);
+    assert.equal(3, players.length);
+  });
+
+  it("Requires a min amount of ether to enter", async () => {
+    try {
+      await lottery.methods.enter().send({
+        from: accounts[0],
+        value: 0,
+      });
+      assert(false);
+    } catch (error) {
+      assert(error);
+    }
+  });
+
+  it("Only manager can call pick a winner", async () => {
+    try {
+      await lottery.methods.pickWinner().send({
+        from: accounts[1],
+      });
+      assert(false);
+    } catch (error) {
+      assert(error);
+    }
+  });
+
+  it("Sends money to the winner and resets the playyer list", async () => {
+    await lottery.methods.enter().send({
+      from: accounts[0],
+      value: web3.utils.toWei("2", "ether"),
+    });
+
+    const initialBalance = await web3.eth.getBalance(accounts[0]);
+
+    await lottery.methods.pickWinner().send({ from: accounts[0] });
+
+    const finalBalance = await web3.eth.getBalance(accounts[0]);
+
+    const difference = finalBalance - initialBalance;
+    console.log(difference);
+    assert(difference > web3.utils.toWei("1.8", "ether"));
   });
 });
-
-// MOCHA - Example tests.
-
-// class Car {
-//   park() {
-//     return "stopped";
-//   }
-
-//   drive() {
-//     return "vroom";
-//   }
-// }
-
-// let car;
-
-// beforeEach(() => {
-//   car = new Car();
-// });
-
-// describe("Test Car class", () => {
-//   it("Park function", () => {
-//     assert.equal(car.park(), "stopped");
-//   });
-
-//   it("Drive function", () => {
-//     assert.equal(car.drive(), "vroom");
-//   });
-// });
