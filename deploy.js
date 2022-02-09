@@ -4,7 +4,7 @@ const Web3 = require("web3");
 const { abi, evm } = require("./compile");
 
 const provider = new HDWalletProvider(
-  "orient alert knee trap oval snap rather fiber banner velvet drama loop",
+  "MNEMONIC_CODE", // Insert your mnemonic here.
   "https://rinkeby.infura.io/v3/e3a32872e74f459a9c2b97b1bf619bcb"
 );
 
